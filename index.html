@@ -678,6 +678,22 @@ function fbMsg(e){const c=(e&&e.code)||'';
  if(c==='auth/network-request-failed')return 'เชื่อมต่ออินเทอร์เน็ตไม่ได้';
  if(c==='auth/operation-not-allowed')return 'ยังไม่ได้เปิดล็อกอินแบบ Email/Password ใน Firebase';
  return 'เกิดข้อผิดพลาด ('+(c||'ไม่ทราบสาเหตุ')+')';}
+let giftRef=null;
+function stopGifts(){try{giftRef&&giftRef.off();}catch(e){}giftRef=null;App.admin=false;App.players=null;}
+function applyGift(g){const a=App.acc,got=[];if(!a||!g)return got;
+ const mn=Math.trunc(Number(g.money));if(mn&&Math.abs(mn)<=1e9){a.money=Math.max(0,a.money+mn);got.push('เงิน '+(mn>0?'+':'')+fmt(mn));}
+ if(g.cards&&typeof g.cards==='object')for(const k in g.cards){const q=Math.trunc(Number(g.cards[k]));if(!CARDS[k]||!(q>=1&&q<=100))continue;a.cards[k]=(a.cards[k]||0)+q;got.push(CARDS[k].name+' ×'+q);}
+ return got;}
+async function afterAuth(){
+ stopGifts();const uid=App.id;if(!uid||!fbDb)return;
+ giftRef=fbDb.ref('gifts/'+uid);
+ giftRef.on('child_added',s=>{const g=s.val();if(!g||!App.acc||App.id!==uid)return;const got=applyGift(g);try{s.ref.remove();}catch(e){}persist();renderTop();if(got.length)toast('ได้รับจากแอดมิน: '+got.join(', '));
+  const sh=Object.keys(g.cards||{}).find(k=>CARDS[k]&&CARDS[k].rar==='shiny');if(sh)hakiFx({card:sh,quake:!!CARDS[sh].quake});});
+ try{await fbDb.ref('accounts').limitToFirst(1).once('value');if(App.id===uid){App.admin=true;if(App.view==='account')render();}}catch(e){App.admin=false;}
+}
+async function loadPlayers(){try{const s=await fbDb.ref('accounts').once('value');const L=[];s.forEach(c=>{try{const d=JSON.parse(c.val().json);L.push({uid:c.key,name:d.name,money:d.money});}catch(e){}});L.sort((a,b)=>String(a.name).localeCompare(String(b.name)));App.players=L;render();}catch(e){toast('โหลดรายชื่อไม่ได้ ('+((e&&e.code)||'ไม่ใช่แอดมิน')+')');}}
+async function adminGive(uid,g){if(uid===App.id){const got=applyGift(g);await persist();renderTop();return got;}
+ await fbDb.ref('gifts/'+uid).push(Object.assign({ts:Date.now()},g));return null;}
 function newAcc(name){const starter={};POOL.base.forEach(i=>starter[i]=2);
  return {name,money:5000,cards:starter,decks:[{name:'เด็คเริ่มต้น',cards:Object.assign({},starter)}],active:0,redeemed:[],wins:0,losses:0,created:Date.now()};}
 function fixAcc(a){pruneAcc(a);a.cards=a.cards||{};a.decks=a.decks||[];a.decks.forEach(d=>{d.cards=d.cards||{};});a.redeemed=a.redeemed||[];a.money=a.money||0;a.wins=a.wins||0;a.losses=a.losses||0;if(a.active==null||a.active>=a.decks.length)a.active=0;return a;}
@@ -689,27 +705,27 @@ async function register(name,pw,pw2){
  await capsReady;if(!fbAuth)return 'เชื่อมต่อ Firebase ไม่ได้ ตรวจอินเทอร์เน็ตแล้วรีเฟรชหน้า';
  let cred;try{cred=await fbAuth.createUserWithEmailAndPassword(await fbEmail(name),await fbPass(pw));}
  catch(e){return (e&&e.code)==='auth/email-already-in-use'?'ชื่อนี้ถูกใช้แล้ว ลองชื่ออื่น':fbMsg(e);}
- App.id=cred.user.uid;App.src='db';App.acc=newAcc(name);await persist();return null;
+ App.id=cred.user.uid;App.src='db';App.acc=newAcc(name);await persist();afterAuth();return null;
 }
 async function login(name,pw){
  await capsReady;if(!fbAuth)return 'เชื่อมต่อ Firebase ไม่ได้ ตรวจอินเทอร์เน็ตแล้วรีเฟรชหน้า';
  let cred;try{cred=await fbAuth.signInWithEmailAndPassword(await fbEmail(name),await fbPass(pw));}
  catch(e){const c=(e&&e.code)||'';return /user-not-found|wrong-password|invalid-credential|invalid-login|invalid-email/.test(c)?'ชื่อหรือรหัสผ่านไม่ถูกต้อง':fbMsg(e);}
  let acc=await loadAcc(cred.user.uid);let fresh=false;if(!acc){acc=newAcc(name.trim());fresh=true;}
- App.id=cred.user.uid;App.acc=fixAcc(acc);App.src='db';if(fresh)await persist();return null;
+ App.id=cred.user.uid;App.acc=fixAcc(acc);App.src='db';if(fresh)await persist();afterAuth();return null;
 }
 async function restore(){
  await capsReady;if(!fbAuth)return false;
  const u=await new Promise(res=>{const off=fbAuth.onAuthStateChanged(x=>{off();res(x);});});
  if(!u)return false;const acc=await loadAcc(u.uid);if(!acc)return false;
- App.id=u.uid;App.acc=fixAcc(acc);App.src='db';return true;
+ App.id=u.uid;App.acc=fixAcc(acc);App.src='db';afterAuth();return true;
 }
 const ROOM_NA='ห้องออนไลน์ใช้งานไม่ได้ เพราะเชื่อมต่อ Firebase ไม่สำเร็จ ลองรีเฟรชหน้านี้';
 const NOTE_OFF='เชื่อมต่อ Firebase ไม่ได้ ตรวจอินเทอร์เน็ตแล้วรีเฟรชหน้า';
 async function changePw(oldp,newp){const a=App.acc,u=fbAuth&&fbAuth.currentUser;if(!u)return 'ยังไม่ได้ล็อกอิน';
  try{await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(await fbEmail(a.name),await fbPass(oldp)));}catch(e){return /too-many/.test((e&&e.code)||'')?fbMsg(e):'รหัสเดิมไม่ถูกต้อง';}
  try{await u.updatePassword(await fbPass(newp));}catch(e){return fbMsg(e);}return null;}
-function signOutHook(){try{fbAuth&&fbAuth.signOut();}catch(e){}}
+function signOutHook(){try{stopGifts();fbAuth&&fbAuth.signOut();}catch(e){}}
 const App={acc:null,id:null,src:'local',view:'auth',tab:'login',ed:null,filter:'all',tfilter:'all',tagf:'all'};
 let G=null;
 // ---------- รหัสโค้ด (ตัวอย่าง ผู้ใช้ส่งโค้ดจริงมาแทนได้) ----------
@@ -831,7 +847,7 @@ const VIEWS={
  },
  account(){
   const a=App.acc;return '<section class="sec" style="max-width:440px"><h2>บัญชี</h2><p class="sub">'+esc(a.name)+' · ชนะ '+a.wins+' แพ้ '+a.losses+' · เก็บข้อมูล'+(App.src==='db'?'ออนไลน์':'ในเครื่องนี้')+'</p>'+
-  '<form data-form="pw" class="stack panel"><h3>เปลี่ยนรหัสผ่าน</h3><label class="f">รหัสเดิม<input id="p-old" type="password" autocomplete="current-password" required></label>'+
+  (App.admin?'<button class="btn pri" data-act="go" data-a="admin" style="margin-bottom:12px">เครื่องมือแอดมิน</button>':'')+(App.src==='db'&&App.id?'<p class="muted" style="font-size:12px;word-break:break-all">UID: '+esc(App.id)+'</p>':'')+'<form data-form="pw" class="stack panel"><h3>เปลี่ยนรหัสผ่าน</h3><label class="f">รหัสเดิม<input id="p-old" type="password" autocomplete="current-password" required></label>'+
   '<label class="f">รหัสใหม่<input id="p-new" type="password" autocomplete="new-password" required></label><label class="f">ยืนยันรหัสใหม่<input id="p-new2" type="password" autocomplete="new-password" required></label>'+
   '<div class="err" id="p-msg" role="status"></div><button class="btn pri" type="submit">บันทึกรหัสใหม่</button></form>'+
   '<div style="margin-top:16px"><button class="btn danger" data-act="logout">ออกจากระบบ</button></div></section>';
@@ -1319,6 +1335,28 @@ document.addEventListener('submit',async e=>{
  if(f==='join'){const er=$('#j-err');er.textContent='';const msg=await roomJoin($('#j-code').value);if(msg)er.textContent=msg;}
 });
 function authNote(){const n=$('#a-note');if(!n)return;capsReady.then(()=>{const e=$('#a-note');if(e)e.textContent=CAPS.db?'บัญชีเก็บออนไลน์ ล็อกอินจากเครื่องไหนก็ได้':NOTE_OFF;});}
+VIEWS.admin=function(){
+ if(!App.admin)return '<section class="sec"><h2>แอดมิน</h2><p class="sub">บัญชีนี้ไม่ใช่แอดมิน</p></section>';
+ const P=App.players||[],RO={base:0,rare:1,epic:2,regen:3,ranger:4,art:5,shiny:6};
+ const who='<label class="f">ผู้รับ<select id="ad-who"><option value="'+esc(App.id)+'">ตัวฉันเอง</option>'+P.filter(p=>p.uid!==App.id).map(p=>'<option value="'+esc(p.uid)+'">'+esc(p.name)+' (เงิน '+fmt(p.money)+')</option>').join('')+'</select></label>';
+ const cs=Object.values(CARDS).sort((a,b)=>(RO[a.rar]||0)-(RO[b.rar]||0)||a.name.localeCompare(b.name)).map(c=>'<option value="'+c.id+'">'+esc(c.name)+' · '+RARN[c.rar]+'</option>').join('');
+ return '<section class="sec" style="max-width:440px"><h2>เครื่องมือแอดมิน</h2><p class="sub">ใช้ได้เฉพาะบัญชีของคุณ ของที่เสกให้ผู้เล่นคนอื่นจะเข้าบัญชีเขาตอนเขาเปิดเกม</p>'+
+  '<button class="btn" data-act="adload">โหลดรายชื่อผู้เล่น ('+P.length+' คน)</button>'+
+  '<form data-form="adm" class="stack panel" style="margin-top:12px">'+who+
+  '<label class="f">จำนวนเงิน (ใส่ติดลบเพื่อหักเงิน)<input id="ad-money" type="number" inputmode="numeric" placeholder="เช่น 100000"></label><button class="btn pri" type="submit" data-kind="money">เสกเงิน</button>'+
+  '<label class="f">การ์ด<select id="ad-card">'+cs+'</select></label><label class="f">จำนวนใบ<input id="ad-qty" type="number" inputmode="numeric" value="1" min="1" max="100"></label><button class="btn pri" type="submit" data-kind="card">เสกการ์ด</button>'+
+  '<div class="err" id="ad-msg" role="status"></div></form><div style="margin-top:12px"><button class="btn" data-act="account">กลับ</button></div></section>';
+};
+ACTIONS.adload=function(){loadPlayers();};
+document.addEventListener('submit',async e=>{
+ if(!e.target.dataset||e.target.dataset.form!=='adm')return;e.preventDefault();
+ const m=$('#ad-msg'),kind=e.submitter&&e.submitter.dataset.kind,uid=$('#ad-who').value;m.className='err';
+ try{let g;
+  if(kind==='money'){const n=Math.trunc(Number($('#ad-money').value));if(!n||Math.abs(n)>1e9){m.textContent='ใส่จำนวนเงิน (ไม่เกิน 1,000,000,000)';return;}g={money:n};}
+  else{const q=Math.trunc(Number($('#ad-qty').value));if(!(q>=1&&q<=100)){m.textContent='จำนวนใบ 1–100';return;}g={cards:{[$('#ad-card').value]:q}};}
+  await adminGive(uid,g);m.className='okm';m.textContent='เสกแล้ว'+(uid===App.id?' (เข้าบัญชีคุณแล้ว)':' (เข้าบัญชีเขาตอนเปิดเกม)');
+ }catch(e2){m.textContent='ทำไม่สำเร็จ ('+((e2&&e2.code)||'ไม่ใช่แอดมิน')+')';}
+});
 (async function boot(){
  render();authNote();
  if(await restore()){go('home');}
