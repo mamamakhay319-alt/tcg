@@ -47,6 +47,8 @@ label.f{display:grid;gap:5px;font-size:14.5px;color:var(--mut)}
 .auth{max-width:420px;margin:6vh auto 0}
 .auth h1{font-size:34px;color:var(--brass);margin-bottom:6px}
 /* home */
+.rainbow{background:linear-gradient(90deg,#ff4d4d,#ffa63d,#ffe94d,#4dff88,#4dd2ff,#6f7bff,#c75dff,#ff4d4d);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;font-weight:800;animation:rb 6s linear infinite}@keyframes rb{to{background-position:300% 0}}
+.ttl{display:block;font-size:15px;margin-top:2px}
 .hello{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
 .play{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:18px}
 .big{display:block;text-align:left;padding:22px 20px;border-radius:16px;border:1px solid var(--line);background:linear-gradient(135deg,#1d3a44,#13262d);width:100%}
@@ -337,6 +339,15 @@ const POOL={};RAR.forEach(r=>POOL[r]=[]);Object.values(CARDS).forEach(c=>{if(!c.
 const hidden=(c,a)=>!!c.secret&&!(a&&a.cards&&a.cards[c.id]>0);
 const rarList=a=>RAR.concat(Object.values(CARDS).some(c=>c.secret&&!hidden(c,a))?['shiny']:[]);
 const SECRET=Object.values(CARDS).filter(c=>c.secret);
+const TITLES=[{id:'shiny',name:'Shiny Master',cls:'rainbow',how:'เก็บการ์ดไชนี่ให้ครบทุกใบ',prog:a=>{const n=SECRET.filter(c=>(a.cards[c.id]||0)>0).length;return[n,SECRET.length];}}];
+function titleOk(a,t){const p=t.prog(a);return p[0]>=p[1]&&p[1]>0;}
+function titleOf(a){const t=TITLES.find(x=>x.id===(a&&a.title));return t&&titleOk(a,t)?t:null;}
+const TI={};
+function tiSet(n,t){if(!n)return;if(TITLES.some(x=>x.id===t))TI[n]=t;else delete TI[n];}
+function tiMap(){const o=Object.assign({},TI),m=titleOf(App.acc);o[App.acc.name]=m?m.id:'';return o;}
+function tiMerge(m){if(m&&typeof m==='object')for(const n in m)if(n!==App.acc.name)tiSet(String(n).slice(0,16),m[n]);}
+function nameH(n){const id=n===App.acc.name?(titleOf(App.acc)||{}).id:TI[n],t=TITLES.find(x=>x.id===id);return esc(n)+(t?' <span class="'+t.cls+'" style="font-size:12px">'+esc(t.name)+'</span>':'');}
+function titleH(a){const t=titleOf(a);return t?'<span class="ttl '+t.cls+'">'+esc(t.name)+'</span>':'';}
 const ALLTAGS=[...new Set(Object.values(CARDS).flatMap(c=>c.tags||[]))];
 function hasTag(c,t){return !!(c&&c.tags&&c.tags.indexOf(t)>=0);}
 function isRanger(c){return c.rar==='ranger'||!!c.ranger;}
@@ -776,7 +787,7 @@ async function adminGive(uid,g){if(uid===App.id){const got=applyGift(g);await pe
  await fbDb.ref('gifts/'+uid).push(Object.assign({ts:Date.now()},g));return null;}
 function newAcc(name){const starter={};POOL.base.forEach(i=>starter[i]=2);
  return {name,money:5000,cards:starter,decks:[{name:'เด็คเริ่มต้น',cards:Object.assign({},starter)}],active:0,redeemed:[],wins:0,losses:0,created:Date.now()};}
-function fixAcc(a){pruneAcc(a);a.cards=a.cards||{};a.decks=a.decks||[];a.decks.forEach(d=>{d.cards=d.cards||{};});a.redeemed=a.redeemed||[];a.money=a.money||0;a.wins=a.wins||0;a.losses=a.losses||0;if(a.active==null||a.active>=a.decks.length)a.active=0;return a;}
+function fixAcc(a){pruneAcc(a);a.title=a.title||null;a.cards=a.cards||{};a.decks=a.decks||[];a.decks.forEach(d=>{d.cards=d.cards||{};});a.redeemed=a.redeemed||[];a.money=a.money||0;a.wins=a.wins||0;a.losses=a.losses||0;if(a.active==null||a.active>=a.decks.length)a.active=0;return a;}
 async function register(name,pw,pw2){
  name=name.trim();
  if(name.length<2||name.length>16)return 'ชื่อต้องยาว 2–16 ตัวอักษร';
@@ -934,7 +945,7 @@ const VIEWS={
  },
  home(){
   const a=App.acc,d=activeDeck(),dc=d?deckCheck(d.cards,a.cards):'ยังไม่มีเด็ค';
-  return '<section class="sec"><div class="hello"><h2>สวัสดี '+esc(a.name)+'</h2><span class="chip">ชนะ <b>'+a.wins+'</b> แพ้ <b>'+a.losses+'</b></span></div>'+
+  return '<section class="sec"><div class="hello"><h2>สวัสดี '+esc(a.name)+titleH(a)+'</h2><span class="chip">ชนะ <b>'+a.wins+'</b> แพ้ <b>'+a.losses+'</b></span></div>'+
   '<div class="play"><button class="big" data-act="go" data-a="event" style="grid-column:1/-1;border-color:var(--brass)"><h3>✦ โหมดอีเว้นท์ ×2</h3><p>เล่นกับ AI ระดับยาก ทุกอย่างเพิ่ม 2 เท่า ชนะรับ 5,000</p></button><button class="big" data-act="go" data-a="team" style="grid-column:1/-1"><h3>เล่น 2v2</h3><p>คุณ + AI เพื่อนร่วมทีม สู้ AI 2 ตัว ระดับสุ่ม เห็นการ์ดเพื่อนได้</p></button><button class="big" data-act="go" data-a="ai"><h3>เล่นกับ AI</h3><p>ง่าย ปกติ ยาก ฝันร้าย ฝันเปียก ชนะรับเงินสูงสุด 10,000</p></button>'+
   '<button class="big" data-act="go" data-a="room"><h3>เล่นกับเพื่อน</h3><p>สร้างห้องหรือใส่รหัสห้อง ชนะ 500 แพ้ยังได้ 250</p></button></div>'+
   (dc?'<p class="err">เด็คที่ใช้อยู่ยังเล่นไม่ได้: '+esc(dc)+'</p>':'')+
@@ -942,7 +953,7 @@ const VIEWS={
   '<button class="mrow" data-act="go" data-a="decks"><b>จัดเด็ค</b><span>'+(d?esc(d.name)+' · '+dTotal(d.cards)+' ใบ':'สร้างเด็ค')+'</span></button>'+
   '<button class="mrow" data-act="recsopen"><b>เด็คแนะนำ</b><span>เด็คที่ผู้เล่นแชร์</span></button><button class="mrow" data-act="go" data-a="index"><b>ดัชนีการ์ด</b><span>'+Object.keys(a.cards).filter(k=>a.cards[k]>0&&CARDS[k]).length+' / '+Object.values(CARDS).filter(c=>!hidden(c,a)).length+' ใบ</span></button>'+
   '<button class="mrow" data-act="go" data-a="code"><b>ใส่โค้ด</b><span>รับไอเทม</span></button>'+
-  '<button class="mrow" data-act="go" data-a="account"><b>บัญชี</b><span>เปลี่ยนรหัสผ่าน</span></button></div></section>';
+  '<button class="mrow" data-act="go" data-a="titles"><b>ฉายา</b><span>'+(titleOf(a)?esc(titleOf(a).name):'ดูวิธีได้รับ')+'</span></button><button class="mrow" data-act="go" data-a="account"><b>บัญชี</b><span>เปลี่ยนรหัสผ่าน</span></button></div></section>';
  },
  index(){
   const a=App.acc,rs=['all',...rarList(a)],ts=['all',...Object.keys(TYPN)];
@@ -963,6 +974,9 @@ const VIEWS={
   const a=App.acc;return '<section class="sec" style="max-width:440px"><h2>ใส่โค้ด</h2><p class="sub">ใส่โค้ดเพื่อรับเงินหรือการ์ด โค้ดหนึ่งอันใช้ได้ครั้งเดียวต่อไอดี</p>'+
   '<form data-form="code" class="stack"><input id="c-in" placeholder="โค้ด" autocomplete="off" autocapitalize="characters"><div class="err" id="c-msg" role="status"></div><button class="btn pri" type="submit">รับไอเทม</button></form>'+
   (a.redeemed.length?'<p class="muted" style="margin-top:14px;font-size:13px">ใช้แล้ว: '+a.redeemed.map(esc).join(', ')+'</p>':'')+'</section>';
+ },
+ titles(){
+  const a=App.acc;return '<section class="sec" style="max-width:520px"><h2>ฉายา</h2><p class="sub">ฉายาแสดงใต้ชื่อของคุณในหน้าเมนู เลือกใช้ได้ครั้งละ 1 อัน</p>'+TITLES.map(t=>{const p=t.prog(a),ok=titleOk(a,t),on=a.title===t.id;return '<div class="panel stack" style="margin-bottom:10px"><div style="font-size:22px"><span class="'+t.cls+'">'+esc(t.name)+'</span></div><div class="muted" style="font-size:14px">วิธีได้รับ: '+esc(t.how)+'</div><div style="font-size:14px">ความคืบหน้า: <b>'+p[0]+' / '+p[1]+'</b> '+(ok?'· <b style="color:#6fe0a0">ได้รับแล้ว</b>':'· ยังไม่ได้รับ')+'</div>'+(ok?'<button class="btn '+(on?'':'pri')+'" data-act="'+(on?'titleoff':'titleuse')+'" data-a="'+t.id+'">'+(on?'ถอดฉายา':'ใช้ฉายานี้')+'</button>':'<button class="btn" disabled>ยังไม่ปลดล็อก</button>')+'</div>';}).join('')+'<div style="margin-top:12px"><button class="btn" data-act="home">กลับ</button></div></section>';
  },
  account(){
   const a=App.acc;return '<section class="sec" style="max-width:440px"><h2>บัญชี</h2><p class="sub">'+esc(a.name)+' · ชนะ '+a.wins+' แพ้ '+a.losses+' · เก็บข้อมูล'+(App.src==='db'?'ออนไลน์':'ในเครื่องนี้')+'</p>'+
@@ -1255,7 +1269,7 @@ function startTeam(){
  G=newG('team',{T,foe:1,D:null,level:'team'});G.S=tDuel(0,1,1);G.V=view(G.S,0);App.view='game';render();
  tBegin(Math.floor(Math.random()*4));
 }
-function teamLbl(V){const T=G.T;return T.over?'จบเกม':(V.pend&&V.pend.me?'เลือกว่าจะปัดไหม':(T.cur===0?'ตาของคุณ':'ตาของ '+esc(T.p[T.cur].name)));}
+function teamLbl(V){const T=G.T;return T.over?'จบเกม':(V.pend&&V.pend.me?'เลือกว่าจะปัดไหม':(T.cur===0?'ตาของคุณ':'ตาของ '+nameH(T.p[T.cur].name)));}
 function teamBarH(){
  const T=G.T;let h='<div class="panel" style="margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="muted" style="font-size:13px">โจมตีศัตรู:</span>';
  [1,3].forEach(s=>{const P=T.p[s],on=G.foe===s;h+='<button class="btn sm'+(on?' pri':'')+'" data-act="foe" data-a="'+s+'"'+(T.alive[s]?'':' disabled')+'>'+esc(P.name)+' ♥'+Math.max(0,P.hp)+(T.alive[s]?'':' ✕')+'</button>';});
@@ -1264,7 +1278,7 @@ function teamBarH(){
 }
 function teamPanelH(){
  const T=G.T,P0=T.p[2],V3=view(tDuel(2,1),0),P=V3.p[0],none={me:{},op:{},opP:false,opT:false};
- let h='<div class="game" style="margin-top:10px"><div class="panel stack"><b>เพื่อนร่วมทีม: '+esc(P0.name)+(T.alive[2]?'':' <span class="err">(ถูกกำจัด)</span>')+'</b>'+
+ let h='<div class="game" style="margin-top:10px"><div class="panel stack"><b>เพื่อนร่วมทีม: '+nameH(P0.name)+(T.alive[2]?'':' <span class="err">(ถูกกำจัด)</span>')+'</b>'+
   '<div class="stat"><span class="nm">♥ '+Math.max(0,P0.hp)+' / '+MAXHP+'</span>'+pips(P0.energy,MAXE)+'</div>'+
   '<div class="piles"><span>กองการ์ด '+P0.deck.length+'</span><span>บนมือ '+P0.hand.length+'</span></div>'+
   '<div style="pointer-events:none">'+rowH(P,'op',none,V3)+'</div>'+
@@ -1284,7 +1298,7 @@ function checkOver(){
 function pips(n,mx){let s='';for(let i=0;i<(mx||MAXE);i++)s+='<i class="'+(i<n?'on':'')+'"></i>';return '<span class="pips">'+s+'<b style="margin-left:6px;font:500 14px var(--ff-d)">'+n+'</b></span>';}
 function statusH(P,mine,V,tg){
  const MH=MAXHP*(V.k||1),pc=Math.max(0,P.hp/MH*100),hrt='♥'.repeat(P.hp)+'<span style="opacity:.3">'+'♥'.repeat(Math.max(0,MH-P.hp))+'</span>';
- return '<div class="stat"><span class="nm">'+esc(P.name)+(V.cur===(mine?V.me:1-V.me)&&!V.over?' <span class="muted" style="font-size:12px">· กำลังเล่น</span>':'')+'</span>'+pips(P.energy,MAXE*(V.k||1))+
+ return '<div class="stat"><span class="nm">'+nameH(P.name)+(V.cur===(mine?V.me:1-V.me)&&!V.over?' <span class="muted" style="font-size:12px">· กำลังเล่น</span>':'')+'</span>'+pips(P.energy,MAXE*(V.k||1))+
  '<div class="hp"><i style="width:'+pc+'%"></i><span>'+hrt+' '+P.hp+' / '+MH+'</span></div></div>'+
  '<div class="piles"><span>กองการ์ด '+P.deckN+'</span><span>บนมือ '+P.handN+'</span><button data-act="disc" data-a="'+(mine?'me':'op')+'">ทิ้งแล้ว '+P.disc.length+'</button>'+P.passives.map(id=>'<button data-act="card" data-a="'+id+'">พาสซีฟ: '+esc(CARDS[id].name)+'</button>').join('')+'</div>';
 }
@@ -1380,7 +1394,7 @@ function otSnap(H,h){
 }
 function otBroadcast(H){
  for(let s=0;s<4;s++){if(!H.T.hum[s])continue;const sn=otSnap(H,s);
-  if(s===0)otApply(sn);else if(H.T.net[s])H.room.emit('tview',{to:H.T.net[s],snap:sn}).catch(()=>{});}
+  if(s===0)otApply(sn);else if(H.T.net[s])H.room.emit('tview',{to:H.T.net[s],snap:sn,ti:tiMap()}).catch(()=>{});}
 }
 function otTick(H){
  if(G.H!==H)return;clearTimeout(H.timer);const T=H.T;otBroadcast(H);
@@ -1460,7 +1474,7 @@ function otSend(a){
 // ---------- ออนไลน์ ----------
 function broadcast(){
  if(!G||!G.room||!G.S)return;
- G.room.emit('view',{to:1,v:view(G.S,1)}).catch(()=>{});
+ G.room.emit('view',{to:1,v:view(G.S,1),ti:tiMap()}).catch(()=>{});
 }
 function genCode(){const a='abcdefghjkmnpqrstuvwxyz23456789';let s='';for(let i=0;i<5;i++)s+=a[Math.floor(Math.random()*a.length)];return s;}
 // ---------- จับคู่อัตโนมัติ (ออนไลน์) : n=1v1 e=×2 t=2v2 ----------
@@ -1511,7 +1525,7 @@ async function roomHost(codeArg,kind){
    const lobby=[];App.roomUI.lobby=lobby;
    const upd=()=>{if(App.roomUI&&!App.roomUI.started){App.roomUI.status='รอผู้เล่น '+(lobby.length+1)+'/4 (คนแรกที่เข้าเป็นเพื่อนร่วมทีม)';if(App.view==='room')render();}};
    off.push(room.on('hello',m=>{
-    if(m.isMe||m.sameTab||!m.data||!App.roomUI)return;
+    if(m.isMe||m.sameTab||!m.data||!App.roomUI)return;tiSet(String(m.data.name||'').slice(0,16),m.data.ti);
     if(App.roomUI.started){if(G&&G.H&&!G.H.T.net.includes(m.peer))room.emit('tview',{to:m.peer,rej:'เกมเริ่มไปแล้ว'}).catch(()=>{});return;}
     if(lobby.some(x=>x.peer===m.peer))return;
     const dk=Array.isArray(m.data.deck)?m.data.deck.filter(x=>typeof x==='string'&&CARDS[x]):[];
@@ -1537,7 +1551,7 @@ async function roomHost(codeArg,kind){
    return;
   }
   off.push(room.on('hello',m=>{
-   if(m.isMe||m.sameTab||(App.roomUI&&App.roomUI.started)||!m.data)return;
+   if(m.isMe||m.sameTab||(App.roomUI&&App.roomUI.started)||!m.data)return;tiSet(String(m.data.name||'').slice(0,16),m.data.ti);
    const dk=Array.isArray(m.data.deck)?m.data.deck.filter(x=>typeof x==='string'&&CARDS[x]):[];
    const cnt={};dk.forEach(x=>cnt[x]=(cnt[x]||0)+1);
    if(dk.length<MINDECK||dk.length>MAXDECK||dk.length!==m.data.deck.length||dRangers(cnt)>MAXRANGER||Object.keys(cnt).some(x=>cnt[x]>maxCopy(CARDS[x]))){room.emit('view',{to:1,rej:'เด็คของคุณไม่ถูกต้องตามกติกา'}).catch(()=>{});return;}
@@ -1564,10 +1578,10 @@ async function roomJoin(code){
  try{
   const room=await CAPS.room.join('cg-'+code),off=[];let tries=0,timer=0;
   const hello=()=>{if(G&&(G.mode==='guest'||G.mode==='tv'))return;if(++tries>12){App.roomUI&&(App.roomUI.status='ไม่พบโฮสต์ ตรวจรหัสห้องแล้วลองใหม่');if(App.view==='room')render();return;}
-   room.emit('hello',{name:App.acc.name,deck:deckList(d.cards)}).catch(()=>{});timer=setTimeout(hello,2500);};
+   room.emit('hello',{name:App.acc.name,ti:(titleOf(App.acc)||{}).id||'',deck:deckList(d.cards)}).catch(()=>{});timer=setTimeout(hello,2500);};
   const cleanup=()=>{clearTimeout(timer);off.forEach(f=>f());room.leave().catch(()=>{});App.roomUI=null;};
   off.push(room.on('tview',m=>{
-   if(m.isMe||m.sameTab||!m.data||m.data.to!==room.peer)return;
+   if(m.isMe||m.sameTab||!m.data||m.data.to!==room.peer)return;tiMerge(m.data.ti);
    if(m.data.rej){toast(m.data.rej);cleanup();render();return;}
    if(m.data.err)toast(m.data.err);
    if(!m.data.snap)return;clearTimeout(timer);
@@ -1576,7 +1590,7 @@ async function roomJoin(code){
   }));
   off.push(room.onPeers(ch=>{if(G&&G.mode==='tv'&&!G.H&&!G.done&&G.hostPeer&&ch.left.some(p=>p.peer===G.hostPeer))otFinish({win:false,reason:'เจ้าของห้องหลุดจากเกม',noReward:true});}));
   off.push(room.on('view',m=>{
-   if(m.isMe||m.sameTab||!m.data||m.data.to!==1)return;
+   if(m.isMe||m.sameTab||!m.data||m.data.to!==1)return;tiMerge(m.data.ti);
    if(m.data.rej){toast(m.data.rej);cleanup();render();return;}
    if(m.data.err)toast(m.data.err);
    if(!m.data.v)return;
@@ -1607,6 +1621,8 @@ const ACTIONS={
  foe(a){const s=+a;if(G&&G.mode==='tv'&&!G.done&&G.T.alive[s]&&!(G.S&&G.S.pend)){G.foe=s;G.sel=null;G.focus=null;otApply({T:G.T,pend:null});return;}if(!G||G.mode!=='team'||G.done||!G.T.alive[s]||(G.D&&G.D.hum===1))return;const T=G.T;G.foe=s;G.sel=null;G.focus=null;const mine=T.cur===0&&!T.over;G.S=tDuel(0,s,mine?0:1);G.D=mine?{a:0,f:s,hum:0}:null;G.me=0;G.V=view(G.S,0);renderGame();},
  logout(){lsDel('cg_sess');signOutHook();if(G&&G.cleanup)G.cleanup();G=null;App.acc=null;App.ed=null;App.tab='login';go('auth');authNote();},
  decksel(a){loadEd(+a);render();},
+ titleuse(a){const t=TITLES.find(x=>x.id===a);if(!t||!titleOk(App.acc,t))return;App.acc.title=a;persist();render();toast('ใช้ฉายา '+t.name+' แล้ว');},
+ titleoff(){App.acc.title=null;persist();render();toast('ถอดฉายาแล้ว');},
  deckshare(){const E=App.ed,d=App.acc.decks[E.i],code=deckEnc(d.name,d.cards),o=$('#d-out');o.value=code;o.hidden=false;try{o.focus();o.select();}catch(e){}
   try{navigator.clipboard.writeText(code).then(()=>toast('คัดลอกรหัสเด็คแล้ว'),()=>toast('กดค้างที่ช่องรหัสเพื่อคัดลอก'));}catch(e){toast('กดค้างที่ช่องรหัสเพื่อคัดลอก');}
   setMsg('d-msg','รหัสนี้เป็นของเด็คที่บันทึกแล้ว ส่งให้เพื่อนวางในช่อง "นำเข้า" ได้เลย',true);},
