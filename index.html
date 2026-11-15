@@ -48,6 +48,7 @@ label.f{display:grid;gap:5px;font-size:14.5px;color:var(--mut)}
 .auth h1{font-size:34px;color:var(--brass);margin-bottom:6px}
 /* home */
 .rainbow{background:linear-gradient(90deg,#ff4d4d,#ffa63d,#ffe94d,#4dff88,#4dd2ff,#6f7bff,#c75dff,#ff4d4d);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;font-weight:800;animation:rb 6s linear infinite}@keyframes rb{to{background-position:300% 0}}
+.t-gold{background:linear-gradient(90deg,#ffe27a,#ffb300,#fff2b0,#ffb300,#ffe27a);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;font-weight:800;animation:rb 5s linear infinite}.t-silver{color:#dfe7ee;font-weight:800;text-shadow:0 0 8px #9fb3bd88}.t-bronze{color:#e8995a;font-weight:800}.t-blue{color:#6fb6ff;font-weight:700}.t-green{color:#6fe0a0;font-weight:700}
 .ttl{display:block;font-size:15px;margin-top:2px}
 .hello{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
 .play{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:18px}
@@ -340,6 +341,9 @@ const hidden=(c,a)=>!!c.secret&&!(a&&a.cards&&a.cards[c.id]>0);
 const rarList=a=>RAR.concat(Object.values(CARDS).some(c=>c.secret&&!hidden(c,a))?['shiny']:[]);
 const SECRET=Object.values(CARDS).filter(c=>c.secret);
 const TITLES=[{id:'shiny',name:'Shiny Master',cls:'rainbow',how:'เก็บการ์ดไชนี่ให้ครบทุกใบ',prog:a=>{const n=SECRET.filter(c=>(a.cards[c.id]||0)>0).length;return[n,SECRET.length];}}];
+const RB=[['w','ชนะมากสุด',['Grand Champion','Warlord','Veteran','Challenger','Contender']],['r','อัตราชนะ',['Untouchable','Sharpshooter','Strategist','Tactician','Duelist']],['m','เงินสะสม',['Billionaire','Tycoon','Magnate','Merchant','Gold Hoarder']],['l','แพ้มากสุด',['Unbreakable','Resilient','Tenacious','Persistent',"Fighter's Heart"]]];
+const RCLS=['t-gold','t-silver','t-bronze','t-blue','t-green'];
+RB.forEach(b=>b[2].forEach((nm,i)=>TITLES.push({id:b[0]+(i+1),name:nm,cls:RCLS[i],how:'ติดอันดับ '+(i+1)+' ของ "'+b[1]+'" (อัปเดตทุก 2 วัน)',board:b[0],rank:i+1,prog:()=>[(App.lbPos&&App.lbPos[b[0]])===i+1?1:0,1]})));
 function titleOk(a,t){const p=t.prog(a);return p[0]>=p[1]&&p[1]>0;}
 function titleOf(a){const t=TITLES.find(x=>x.id===(a&&a.title));return t&&titleOk(a,t)?t:null;}
 const TI={};
@@ -900,16 +904,19 @@ async function lbPushNow(){if(!hasDB()||!App.acc)return;const r=lbRow(),k=JSON.s
  try{await CAPS.db.ref('leaderboard/'+App.id).set(Object.assign({ts:Date.now()},r));lbLast=k;}catch(e){}}
 function lbQueue(){if(!hasDB()||!App.acc)return;clearTimeout(lbT);lbT=setTimeout(lbPushNow,6000);}
 const _persist0=persist;persist=function(){const r=_persist0.apply(this,arguments);try{lbQueue();}catch(e){}return r;};
+async function lbGet(force){const sr=CAPS.db.ref('lbsnap');let sn=(await sr.once('value')).val();const now=Date.now();
+ if(!sn||!sn.ts||now-sn.ts>=LB_MS||(force&&App.admin)){
+  const live=(await CAPS.db.ref('leaderboard').once('value')).val()||{},rows={};
+  Object.keys(live).forEach(u=>{const r=live[u];if(r&&typeof r.w==='number'&&typeof r.l==='number'&&typeof r.m==='number')rows[u]={n:String(r.n||'').slice(0,20),ti:String(r.ti||''),w:r.w|0,l:r.l|0,m:r.m|0};});
+  try{await sr.set({ts:now,rows});sn={ts:now,rows};}catch(e){sn=(await sr.once('value')).val()||sn;}}
+ return sn||{ts:0,rows:{}};}
+function lbSetSnap(sn){App.lb=sn;const pos={};['w','r','m','l'].forEach(t=>{pos[t]=lbList(t,sn).findIndex(x=>x.u===App.id)+1;});App.lbPos=pos;}
+async function lbBoot(){try{await lbPushNow();lbSetSnap(await lbGet(false));if(App.acc&&App.acc.title&&!titleOf(App.acc)&&App.view==='home'){}render();renderTop();}catch(e){}}
 async function loadLb(force){App.lb=null;App.lbErr='';render();
- try{await lbPushNow();const sr=CAPS.db.ref('lbsnap');let sn=(await sr.once('value')).val();const now=Date.now();
-  if(!sn||!sn.ts||now-sn.ts>=LB_MS||(force&&App.admin)){
-   const live=(await CAPS.db.ref('leaderboard').once('value')).val()||{},rows={};
-   Object.keys(live).forEach(u=>{const r=live[u];if(r&&typeof r.w==='number'&&typeof r.l==='number'&&typeof r.m==='number')rows[u]={n:String(r.n||'').slice(0,20),ti:String(r.ti||''),w:r.w|0,l:r.l|0,m:r.m|0};});
-   try{await sr.set({ts:now,rows});sn={ts:now,rows};}catch(e){sn=(await sr.once('value')).val()||sn;}}
-  App.lb=sn||{ts:0,rows:{}};}
+ try{await lbPushNow();lbSetSnap(await lbGet(force));}
  catch(e){App.lb={ts:0,rows:{}};App.lbErr='โหลดอันดับไม่ได้ ('+((e&&e.code)||'ตรวจอินเทอร์เน็ต')+') ถ้าเพิ่งอัปเดต ต้องเพิ่มกฎ Firebase ของอันดับก่อน';}
  if(App.view==='lb')render();}
-function lbList(tab){const sn=App.lb;if(!sn)return[];const L=Object.keys(sn.rows||{}).map(u=>{const r=sn.rows[u],g=r.w+r.l;return{u,n:r.n,ti:r.ti,w:r.w,l:r.l,m:r.m,g,r:g?r.w/g:0};});
+function lbList(tab,sn){sn=sn||App.lb;if(!sn)return[];const L=Object.keys(sn.rows||{}).map(u=>{const r=sn.rows[u],g=r.w+r.l;return{u,n:r.n,ti:r.ti,w:r.w,l:r.l,m:r.m,g,r:g?r.w/g:0};});
  if(tab==='r')return L.filter(x=>x.g>=LB_MIN).sort((a,b)=>b.r-a.r||b.g-a.g);
  const k=tab==='l'?'l':tab==='m'?'m':'w';return L.filter(x=>x[k]>0||k==='m').sort((a,b)=>b[k]-a[k]||b.g-a.g);}
 function lbVal(x,tab){return tab==='r'?(x.r*100).toFixed(1)+'% <span class="muted" style="font-size:12px">('+x.w+'/'+x.g+')</span>':tab==='m'?fmt(x.m):tab==='l'?x.l+' ตา':x.w+' ตา';}
@@ -965,6 +972,7 @@ const VIEWS={
   '<p class="muted" id="a-note" style="font-size:13px"></p></section>';
  },
  home(){
+  if(hasDB()&&App.lbBoot!==App.id){App.lbBoot=App.id;lbBoot();}
   const a=App.acc,d=activeDeck(),dc=d?deckCheck(d.cards,a.cards):'ยังไม่มีเด็ค';
   return '<section class="sec"><div class="hello"><h2>สวัสดี '+esc(a.name)+titleH(a)+'</h2><span class="chip">ชนะ <b>'+a.wins+'</b> แพ้ <b>'+a.losses+'</b></span></div>'+
   '<div class="play"><button class="big" data-act="go" data-a="event" style="grid-column:1/-1;border-color:var(--brass)"><h3>✦ โหมดอีเว้นท์ ×2</h3><p>เล่นกับ AI ระดับยาก ทุกอย่างเพิ่ม 2 เท่า ชนะรับ 5,000</p></button><button class="big" data-act="go" data-a="team" style="grid-column:1/-1"><h3>เล่น 2v2</h3><p>คุณ + AI เพื่อนร่วมทีม สู้ AI 2 ตัว ระดับสุ่ม เห็นการ์ดเพื่อนได้</p></button><button class="big" data-act="go" data-a="ai"><h3>เล่นกับ AI</h3><p>ง่าย ปกติ ยาก ฝันร้าย ฝันเปียก ชนะรับเงินสูงสุด 10,000</p></button>'+
@@ -1013,7 +1021,14 @@ const VIEWS={
   return h+'</section>';
  },
  titles(){
-  const a=App.acc;return '<section class="sec" style="max-width:520px"><h2>ฉายา</h2><p class="sub">ฉายาแสดงใต้ชื่อของคุณในหน้าเมนู เลือกใช้ได้ครั้งละ 1 อัน</p>'+TITLES.map(t=>{const p=t.prog(a),ok=titleOk(a,t),on=a.title===t.id;return '<div class="panel stack" style="margin-bottom:10px"><div style="font-size:22px"><span class="'+t.cls+'">'+esc(t.name)+'</span></div><div class="muted" style="font-size:14px">วิธีได้รับ: '+esc(t.how)+'</div><div style="font-size:14px">ความคืบหน้า: <b>'+p[0]+' / '+p[1]+'</b> '+(ok?'· <b style="color:#6fe0a0">ได้รับแล้ว</b>':'· ยังไม่ได้รับ')+'</div>'+(ok?'<button class="btn '+(on?'':'pri')+'" data-act="'+(on?'titleoff':'titleuse')+'" data-a="'+t.id+'">'+(on?'ถอดฉายา':'ใช้ฉายานี้')+'</button>':'<button class="btn" disabled>ยังไม่ปลดล็อก</button>')+'</div>';}).join('')+'<div style="margin-top:12px"><button class="btn" data-act="home">กลับ</button></div></section>';
+  const a=App.acc,card=t=>{const p=t.prog(a),ok=titleOk(a,t),on=a.title===t.id,ps=t.board&&App.lbPos?App.lbPos[t.board]:0;
+   return '<div class="panel stack" style="margin-bottom:10px"><div style="font-size:22px"><span class="'+t.cls+'">'+esc(t.name)+'</span></div><div class="muted" style="font-size:14px">วิธีได้รับ: '+esc(t.how)+'</div>'+
+   (t.board?'<div style="font-size:14px">อันดับของคุณตอนนี้: <b>'+(ps?'#'+ps:(App.lbPos?'ยังไม่ติดอันดับ':'กำลังโหลด…'))+'</b> '+(ok?'· <b style="color:#6fe0a0">ได้รับแล้ว</b>':'· ยังไม่ได้รับ')+'</div>':'<div style="font-size:14px">ความคืบหน้า: <b>'+p[0]+' / '+p[1]+'</b> '+(ok?'· <b style="color:#6fe0a0">ได้รับแล้ว</b>':'· ยังไม่ได้รับ')+'</div>')+
+   (ok?'<button class="btn '+(on?'':'pri')+'" data-act="'+(on?'titleoff':'titleuse')+'" data-a="'+t.id+'">'+(on?'ถอดฉายา':'ใช้ฉายานี้')+'</button>':'<button class="btn" disabled>ยังไม่ปลดล็อก</button>')+'</div>';};
+  return '<section class="sec" style="max-width:520px"><h2>ฉายา</h2><p class="sub">ฉายาแสดงใต้ชื่อของคุณในหน้าเมนูและห้องสู้ เลือกใช้ได้ครั้งละ 1 อัน ฉายาจากอันดับจะหายไปเมื่อหลุด 5 อันดับแรก และกลับมาเมื่อติดอีกครั้ง</p>'+
+  '<h3 style="margin:14px 0 8px">ฉายาพิเศษ</h3>'+TITLES.filter(t=>!t.board).map(card).join('')+
+  RB.map(b=>'<h3 style="margin:18px 0 8px">ฉายาอันดับ: '+esc(b[1])+'</h3>'+TITLES.filter(t=>t.board===b[0]).map(card).join('')).join('')+
+  '<div style="margin-top:12px"><button class="btn" data-act="home">กลับ</button></div></section>';
  },
  account(){
   const a=App.acc;return '<section class="sec" style="max-width:440px"><h2>บัญชี</h2><p class="sub">'+esc(a.name)+' · ชนะ '+a.wins+' แพ้ '+a.losses+' · เก็บข้อมูล'+(App.src==='db'?'ออนไลน์':'ในเครื่องนี้')+'</p>'+
