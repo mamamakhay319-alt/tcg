@@ -893,6 +893,27 @@ function deckCheck(c,owned){
  for(const k in c)if(CARDS[k]&&c[k]>maxCopy(CARDS[k]))return CARDS[k].name+' ใส่ซ้ำได้สูงสุด '+maxCopy(CARDS[k])+' ใบ';
  if(owned)for(const k in c)if(!CARDS[k]||c[k]>(owned[k]||0))return 'มีการ์ดที่คุณไม่ได้เป็นเจ้าของ';return null;
 }
+// ---------- ระบบอันดับ ----------
+const LB_MS=172800000,LB_MIN=10;let lbT=null,lbLast='';
+function lbRow(){const a=App.acc,t=titleOf(a);return{n:String(a.name).slice(0,20),ti:t?t.id:'',w:a.wins|0,l:a.losses|0,m:Math.max(0,a.money|0)};}
+async function lbPushNow(){if(!hasDB()||!App.acc)return;const r=lbRow(),k=JSON.stringify(r);if(k===lbLast)return;
+ try{await CAPS.db.ref('leaderboard/'+App.id).set(Object.assign({ts:Date.now()},r));lbLast=k;}catch(e){}}
+function lbQueue(){if(!hasDB()||!App.acc)return;clearTimeout(lbT);lbT=setTimeout(lbPushNow,6000);}
+const _persist0=persist;persist=function(){const r=_persist0.apply(this,arguments);try{lbQueue();}catch(e){}return r;};
+async function loadLb(force){App.lb=null;App.lbErr='';render();
+ try{await lbPushNow();const sr=CAPS.db.ref('lbsnap');let sn=(await sr.once('value')).val();const now=Date.now();
+  if(!sn||!sn.ts||now-sn.ts>=LB_MS||(force&&App.admin)){
+   const live=(await CAPS.db.ref('leaderboard').once('value')).val()||{},rows={};
+   Object.keys(live).forEach(u=>{const r=live[u];if(r&&typeof r.w==='number'&&typeof r.l==='number'&&typeof r.m==='number')rows[u]={n:String(r.n||'').slice(0,20),ti:String(r.ti||''),w:r.w|0,l:r.l|0,m:r.m|0};});
+   try{await sr.set({ts:now,rows});sn={ts:now,rows};}catch(e){sn=(await sr.once('value')).val()||sn;}}
+  App.lb=sn||{ts:0,rows:{}};}
+ catch(e){App.lb={ts:0,rows:{}};App.lbErr='โหลดอันดับไม่ได้ ('+((e&&e.code)||'ตรวจอินเทอร์เน็ต')+') ถ้าเพิ่งอัปเดต ต้องเพิ่มกฎ Firebase ของอันดับก่อน';}
+ if(App.view==='lb')render();}
+function lbList(tab){const sn=App.lb;if(!sn)return[];const L=Object.keys(sn.rows||{}).map(u=>{const r=sn.rows[u],g=r.w+r.l;return{u,n:r.n,ti:r.ti,w:r.w,l:r.l,m:r.m,g,r:g?r.w/g:0};});
+ if(tab==='r')return L.filter(x=>x.g>=LB_MIN).sort((a,b)=>b.r-a.r||b.g-a.g);
+ const k=tab==='l'?'l':tab==='m'?'m':'w';return L.filter(x=>x[k]>0||k==='m').sort((a,b)=>b[k]-a[k]||b.g-a.g);}
+function lbVal(x,tab){return tab==='r'?(x.r*100).toFixed(1)+'% <span class="muted" style="font-size:12px">('+x.w+'/'+x.g+')</span>':tab==='m'?fmt(x.m):tab==='l'?x.l+' ตา':x.w+' ตา';}
+function lbFmt(t){return new Date(t).toLocaleString('th-TH',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}
 // ---------- แชร์เด็ค / เด็คแนะนำ ----------
 const SHINY_OF={a01:'n07',a02:'n08',a03:'g09',a04:'n09'};
 function b64e(t){return btoa(unescape(encodeURIComponent(t))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
@@ -953,7 +974,7 @@ const VIEWS={
   '<button class="mrow" data-act="go" data-a="decks"><b>จัดเด็ค</b><span>'+(d?esc(d.name)+' · '+dTotal(d.cards)+' ใบ':'สร้างเด็ค')+'</span></button>'+
   '<button class="mrow" data-act="recsopen"><b>เด็คแนะนำ</b><span>เด็คที่ผู้เล่นแชร์</span></button><button class="mrow" data-act="go" data-a="index"><b>ดัชนีการ์ด</b><span>'+Object.keys(a.cards).filter(k=>a.cards[k]>0&&CARDS[k]).length+' / '+Object.values(CARDS).filter(c=>!hidden(c,a)).length+' ใบ</span></button>'+
   '<button class="mrow" data-act="go" data-a="code"><b>ใส่โค้ด</b><span>รับไอเทม</span></button>'+
-  '<button class="mrow" data-act="go" data-a="titles"><b>ฉายา</b><span>'+(titleOf(a)?esc(titleOf(a).name):'ดูวิธีได้รับ')+'</span></button><button class="mrow" data-act="go" data-a="account"><b>บัญชี</b><span>เปลี่ยนรหัสผ่าน</span></button></div></section>';
+  '<button class="mrow" data-act="lbopen"><b>อันดับ</b><span>ชนะ อัตราชนะ เงิน แพ้</span></button><button class="mrow" data-act="go" data-a="titles"><b>ฉายา</b><span>'+(titleOf(a)?esc(titleOf(a).name):'ดูวิธีได้รับ')+'</span></button><button class="mrow" data-act="go" data-a="account"><b>บัญชี</b><span>เปลี่ยนรหัสผ่าน</span></button></div></section>';
  },
  index(){
   const a=App.acc,rs=['all',...rarList(a)],ts=['all',...Object.keys(TYPN)];
@@ -974,6 +995,22 @@ const VIEWS={
   const a=App.acc;return '<section class="sec" style="max-width:440px"><h2>ใส่โค้ด</h2><p class="sub">ใส่โค้ดเพื่อรับเงินหรือการ์ด โค้ดหนึ่งอันใช้ได้ครั้งเดียวต่อไอดี</p>'+
   '<form data-form="code" class="stack"><input id="c-in" placeholder="โค้ด" autocomplete="off" autocapitalize="characters"><div class="err" id="c-msg" role="status"></div><button class="btn pri" type="submit">รับไอเทม</button></form>'+
   (a.redeemed.length?'<p class="muted" style="margin-top:14px;font-size:13px">ใช้แล้ว: '+a.redeemed.map(esc).join(', ')+'</p>':'')+'</section>';
+ },
+ lb(){
+  let h='<section class="sec" style="max-width:520px"><h2>อันดับ</h2><p class="sub">อัปเดตทุก 2 วัน · แสดง 20 อันดับแรก</p>';
+  if(!hasDB())return h+'<div class="panel">ฟีเจอร์นี้ใช้ได้เฉพาะเวอร์ชันออนไลน์</div></section>';
+  const tab=App.lbTab||'w',TABS=[['w','ชนะมากสุด'],['r','อัตราชนะ'],['m','เงินสะสม'],['l','แพ้มากสุด']];
+  h+='<div class="tabs">'+TABS.map(t=>'<button class="tab" data-act="lbtab" data-a="'+t[0]+'" aria-pressed="'+(tab===t[0])+'">'+t[1]+'</button>').join('')+'</div>';
+  const sn=App.lb;if(!sn)return h+'<p class="muted">กำลังโหลด…</p></section>';
+  if(App.lbErr)h+='<p class="err">'+esc(App.lbErr)+'</p>';
+  const L=lbList(tab);h+='<p class="muted" style="font-size:13px">'+(sn.ts?'อัปเดตล่าสุด '+lbFmt(sn.ts)+' · รอบถัดไปหลัง '+lbFmt(sn.ts+LB_MS):'ยังไม่มีข้อมูล')+(tab==='r'?' · ต้องเล่นอย่างน้อย '+LB_MIN+' ตา':'')+'</p>';
+  if(!L.length)return h+'<div class="panel">ยังไม่มีใครในอันดับนี้</div></section>';
+  h+='<div class="panel stack" style="padding:6px 10px">'+L.slice(0,20).map((x,i)=>{const t=TITLES.find(y=>y.id===x.ti),me=x.u===App.id;
+   return '<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #ffffff14'+(me?';background:#e5b14e22;border-radius:8px':'')+'"><b style="width:30px;text-align:center;font-size:'+(i<3?'20':'15')+'px;color:'+(i===0?'#ffd24d':i===1?'#d5dde3':i===2?'#e0955a':'inherit')+'">'+(i+1)+'</b><div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.n)+(me?' <span class="muted" style="font-size:12px">(คุณ)</span>':'')+'</div>'+(t?'<span class="'+t.cls+'" style="font-size:12px">'+esc(t.name)+'</span>':'')+'</div><b>'+lbVal(x,tab)+'</b></div>';}).join('')+'</div>';
+  const mi=L.findIndex(x=>x.u===App.id);
+  h+='<p style="font-size:14px">'+(mi>=0?'อันดับของคุณ: <b>#'+(mi+1)+'</b> จาก '+L.length+' คน':(tab==='r'?'คุณยังเล่นไม่ถึง '+LB_MIN+' ตา จึงยังไม่ติดอันดับนี้':'คุณยังไม่ติดอันดับนี้'))+'</p>';
+  if(App.admin)h+='<button class="btn" data-act="lbrefresh">รีเฟรชอันดับทันที (แอดมิน)</button>';
+  return h+'</section>';
  },
  titles(){
   const a=App.acc;return '<section class="sec" style="max-width:520px"><h2>ฉายา</h2><p class="sub">ฉายาแสดงใต้ชื่อของคุณในหน้าเมนู เลือกใช้ได้ครั้งละ 1 อัน</p>'+TITLES.map(t=>{const p=t.prog(a),ok=titleOk(a,t),on=a.title===t.id;return '<div class="panel stack" style="margin-bottom:10px"><div style="font-size:22px"><span class="'+t.cls+'">'+esc(t.name)+'</span></div><div class="muted" style="font-size:14px">วิธีได้รับ: '+esc(t.how)+'</div><div style="font-size:14px">ความคืบหน้า: <b>'+p[0]+' / '+p[1]+'</b> '+(ok?'· <b style="color:#6fe0a0">ได้รับแล้ว</b>':'· ยังไม่ได้รับ')+'</div>'+(ok?'<button class="btn '+(on?'':'pri')+'" data-act="'+(on?'titleoff':'titleuse')+'" data-a="'+t.id+'">'+(on?'ถอดฉายา':'ใช้ฉายานี้')+'</button>':'<button class="btn" disabled>ยังไม่ปลดล็อก</button>')+'</div>';}).join('')+'<div style="margin-top:12px"><button class="btn" data-act="home">กลับ</button></div></section>';
@@ -1621,6 +1658,9 @@ const ACTIONS={
  foe(a){const s=+a;if(G&&G.mode==='tv'&&!G.done&&G.T.alive[s]&&!(G.S&&G.S.pend)){G.foe=s;G.sel=null;G.focus=null;otApply({T:G.T,pend:null});return;}if(!G||G.mode!=='team'||G.done||!G.T.alive[s]||(G.D&&G.D.hum===1))return;const T=G.T;G.foe=s;G.sel=null;G.focus=null;const mine=T.cur===0&&!T.over;G.S=tDuel(0,s,mine?0:1);G.D=mine?{a:0,f:s,hum:0}:null;G.me=0;G.V=view(G.S,0);renderGame();},
  logout(){lsDel('cg_sess');signOutHook();if(G&&G.cleanup)G.cleanup();G=null;App.acc=null;App.ed=null;App.tab='login';go('auth');authNote();},
  decksel(a){loadEd(+a);render();},
+ lbopen(){go('lb');loadLb();},
+ lbtab(a){App.lbTab=a;render();},
+ lbrefresh(){loadLb(true);},
  titleuse(a){const t=TITLES.find(x=>x.id===a);if(!t||!titleOk(App.acc,t))return;App.acc.title=a;persist();render();toast('ใช้ฉายา '+t.name+' แล้ว');},
  titleoff(){App.acc.title=null;persist();render();toast('ถอดฉายาแล้ว');},
  deckshare(){const E=App.ed,d=App.acc.decks[E.i],code=deckEnc(d.name,d.cards),o=$('#d-out');o.value=code;o.hidden=false;try{o.focus();o.select();}catch(e){}
