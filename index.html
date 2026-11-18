@@ -885,7 +885,7 @@ function signOutHook(){try{stopGifts();fbAuth&&fbAuth.signOut();}catch(e){}}
 const App={acc:null,id:null,src:'local',view:'auth',tab:'login',ed:null,filter:'all',tfilter:'all',tagf:'all'};
 let G=null;
 // ---------- รหัสโค้ด (ตัวอย่าง ผู้ใช้ส่งโค้ดจริงมาแทนได้) ----------
-const CODES={'ชดเชยรีเจ้น250K':{money:250000},'ออนไลน์':{money:250000},'ผมรักแอดมินมากๆเลยครับ':{money:250000}};
+const CODES={'ชดเชยรีเจ้น250K':{money:250000},'ออนไลน์':{money:250000},'ผมรักแอดมินมากๆเลยครับ':{money:250000},'SKIBIDI':{money:200000},'TV MAN':{money:190000},'SHINY':{money:250000,needTitle:'shiny'}};
 // ---------- crypto ----------
 function randHex(n){const a=new Uint8Array(n);(crypto&&crypto.getRandomValues)?crypto.getRandomValues(a):a.forEach((_,i)=>a[i]=Math.random()*256);return Array.from(a).map(x=>x.toString(16).padStart(2,'0')).join('');}
 async function sha(s){
@@ -1857,6 +1857,7 @@ document.addEventListener('submit',async e=>{
   const raw=$('#c-in').value.trim().toUpperCase(),m=$('#c-msg'),c=CODES[raw],a=App.acc;
   if(!c){m.className='err';m.textContent='ไม่พบโค้ดนี้';return;}
   if(a.redeemed.includes(raw)){m.className='err';m.textContent='คุณใช้โค้ดนี้ไปแล้ว';return;}
+  if(c.needTitle){const tt=TITLES.find(x=>x.id===c.needTitle);if(!tt||!titleOk(a,tt)){m.className='err';m.textContent='โค้ดนี้ใช้ได้เฉพาะผู้ที่มีฉายา '+(tt?tt.name:'')+' เท่านั้น';return;}}
   const got=[];if(c.money){a.money+=c.money;got.push('เงิน '+fmt(c.money));}
   if(c.cards)for(const k in c.cards){a.cards[k]=(a.cards[k]||0)+c.cards[k];got.push(CARDS[k].name+' ×'+c.cards[k]);}
   a.redeemed.push(raw);persist();renderTop();m.className='okm';m.textContent='ได้รับ: '+got.join(', ');$('#c-in').value='';
