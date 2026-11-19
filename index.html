@@ -832,7 +832,7 @@ async function doPersist(){
  catch(e){toast('บันทึกออนไลน์ไม่สำเร็จ ('+((e&&e.code)||'ตรวจอินเทอร์เน็ต')+')');}
 }
 async function loadAcc(uid){
- try{const s=await fbDb.ref('accounts/'+uid).once('value');if(s.exists()){const v=s.val();if(v&&typeof v.json==='string')return JSON.parse(v.json);}}catch(e){console.error(e);}
+ try{const s=await Promise.race([fbDb.ref('accounts/'+uid).once('value'),new Promise((_,rj)=>setTimeout(()=>rj(new Error('timeout')),20000))]);if(s.exists()){const v=s.val();if(v&&typeof v.json==='string')return JSON.parse(v.json);}}catch(e){console.error(e);return 'ERR';}
  return null;
 }
 async function fbEmail(name){return 'u'+(await sha('tcg:'+nameId(name))).slice(0,32)+'@tcg-game.app';}
@@ -876,13 +876,13 @@ async function login(name,pw){
  await capsReady;if(!fbAuth)return 'เชื่อมต่อ Firebase ไม่ได้ ตรวจอินเทอร์เน็ตแล้วรีเฟรชหน้า';
  let cred;try{cred=await fbAuth.signInWithEmailAndPassword(await fbEmail(name),await fbPass(pw));}
  catch(e){const c=(e&&e.code)||'';return /user-not-found|wrong-password|invalid-credential|invalid-login|invalid-email/.test(c)?'ชื่อหรือรหัสผ่านไม่ถูกต้อง':fbMsg(e);}
- let acc=await loadAcc(cred.user.uid);let fresh=false;if(!acc){acc=newAcc(name.trim());fresh=true;}
+ let acc=await loadAcc(cred.user.uid);if(acc==='ERR')return 'โหลดบัญชีไม่สำเร็จ (เน็ตช้าหรือหลุด) ลองกดเข้าสู่ระบบใหม่อีกครั้ง';let fresh=false;if(!acc){acc=newAcc(name.trim());fresh=true;}
  App.id=cred.user.uid;App.acc=fixAcc(acc);App.src='db';if(fresh)await persist();afterAuth();return null;
 }
 async function restore(){
  await capsReady;if(!fbAuth)return false;
  const u=await new Promise(res=>{const off=fbAuth.onAuthStateChanged(x=>{off();res(x);});});
- if(!u)return false;const acc=await loadAcc(u.uid);if(!acc)return false;
+ if(!u)return false;const acc=await loadAcc(u.uid);if(!acc||acc==='ERR')return false;
  App.id=u.uid;App.acc=fixAcc(acc);App.src='db';afterAuth();return true;
 }
 const ROOM_NA='ห้องออนไลน์ใช้งานไม่ได้ เพราะเชื่อมต่อ Firebase ไม่สำเร็จ ลองรีเฟรชหน้านี้';
@@ -1884,9 +1884,8 @@ document.addEventListener('submit',async e=>{
  if(f==='auth'){
   const btn=$('#a-go'),er=$('#a-err');btn.disabled=true;er.textContent='กำลังตรวจสอบ…';
   const name=$('#a-name').value,pw=$('#a-pw').value;
-  const msg=App.tab==='reg'?await register(name,pw,$('#a-pw2').value):await login(name,pw);
+  let msg;try{msg=App.tab==='reg'?await register(name,pw,$('#a-pw2').value):await login(name,pw);if(!msg)go('home');}catch(e){msg='เกิดข้อผิดพลาด: '+((e&&e.message)||e);}
   if(msg){er.textContent=msg;btn.disabled=false;return;}
-  go('home');
  }
  if(f==='code'){
   const raw=$('#c-in').value.trim().toUpperCase(),m=$('#c-msg'),c=CODES[raw],a=App.acc;
