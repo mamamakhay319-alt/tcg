@@ -831,9 +831,13 @@ async function doPersist(){
  try{await fbDb.ref('accounts/'+App.id).set({v:1,json:JSON.stringify(App.acc)});}
  catch(e){toast('บันทึกออนไลน์ไม่สำเร็จ ('+((e&&e.code)||'ตรวจอินเทอร์เน็ต')+')');}
 }
+let loadErr='';
 async function loadAcc(uid){
- try{const s=await Promise.race([fbDb.ref('accounts/'+uid).once('value'),new Promise((_,rj)=>setTimeout(()=>rj(new Error('timeout')),20000))]);if(s.exists()){const v=s.val();if(v&&typeof v.json==='string')return JSON.parse(v.json);}}catch(e){console.error(e);return 'ERR';}
- return null;
+ for(let t=0;t<2;t++){
+  try{const s=await Promise.race([fbDb.ref('accounts/'+uid).once('value'),new Promise((_,rj)=>setTimeout(()=>rj(new Error('timeout')),t?40000:25000))]);loadErr='';if(s.exists()){const v=s.val();if(v&&typeof v.json==='string')return JSON.parse(v.json);}return null;}
+  catch(e){console.error(e);loadErr=String((e&&(e.code||e.message))||e);if(/permission/i.test(loadErr))break;}
+ }
+ return 'ERR';
 }
 async function fbEmail(name){return 'u'+(await sha('tcg:'+nameId(name))).slice(0,32)+'@tcg-game.app';}
 async function fbPass(pw){return sha('tcgpw:'+pw);}
@@ -876,7 +880,7 @@ async function login(name,pw){
  await capsReady;if(!fbAuth)return 'เชื่อมต่อ Firebase ไม่ได้ ตรวจอินเทอร์เน็ตแล้วรีเฟรชหน้า';
  let cred;try{cred=await fbAuth.signInWithEmailAndPassword(await fbEmail(name),await fbPass(pw));}
  catch(e){const c=(e&&e.code)||'';return /user-not-found|wrong-password|invalid-credential|invalid-login|invalid-email/.test(c)?'ชื่อหรือรหัสผ่านไม่ถูกต้อง':fbMsg(e);}
- let acc=await loadAcc(cred.user.uid);if(acc==='ERR')return 'โหลดบัญชีไม่สำเร็จ (เน็ตช้าหรือหลุด) ลองกดเข้าสู่ระบบใหม่อีกครั้ง';let fresh=false;if(!acc){acc=newAcc(name.trim());fresh=true;}
+ let acc=await loadAcc(cred.user.uid);if(acc==='ERR')return 'โหลดบัญชีไม่สำเร็จ ['+loadErr+'] '+(/permission/i.test(loadErr)?'กฎ Firebase ไม่อนุญาตให้อ่านบัญชี':'เน็ตช้าหรือหลุด ลองใหม่อีกครั้ง');let fresh=false;if(!acc){acc=newAcc(name.trim());fresh=true;}
  App.id=cred.user.uid;App.acc=fixAcc(acc);App.src='db';if(fresh)await persist();afterAuth();return null;
 }
 async function restore(){
